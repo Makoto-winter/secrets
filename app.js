@@ -7,7 +7,9 @@ const mongoose = require('mongoose');
 const session = require('express-session');
 const passport = require("passport");
 const passportLocalMongoose = require('passport-local-mongoose');
-const LocalStrategy = require('passport-local').Strategy
+const LocalStrategy = require('passport-local').Strategy;
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const findOrCreate = require('mongoose-findorcreate');
 
 app.set('view engine', 'ejs');
 
@@ -29,23 +31,55 @@ mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true});
 // but tis userShema is an object created from mongoose class.
 const userSchema = new mongoose.Schema ({
   email: String,
-  password: String
+  password: String,
+  googleId: String
 });
 
+// adding two plugings to the userSchema
 userSchema.plugin(passportLocalMongoose);
+userSchema.plugin(findOrCreate);
 
 const User = new mongoose.model("User", userSchema)
 
-// use static authenticate method of model in LocalStrategy
 passport.use(new LocalStrategy(User.authenticate()));
 
-// use static serialize and deserialize of model for passport session support
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+passport.serializeUser(function(user, done) {
+  done(null, user);
+});
+
+passport.deserializeUser(function(user, done) {
+  done(null, user);
+});
+
+
+passport.use(new GoogleStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets",
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo" //! From GitHub Issues because of G+ Deprecation
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    console.log(profile);
+
+    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
 
 app.get("/", (req, res)=>{
   res.render('home');
 });
+
+app.get('/auth/google/secrets',
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  function(req, res) {
+    res.redirect('/secrets');
+  });
+
+app.get("/auth/google",
+  passport.authenticate("google",{ scope: ['profile'] })
+);
 
 app.get("/login", (req, res)=>{
   res.render('login');
@@ -68,7 +102,7 @@ app.get("/logout", (req, res)=>{
   req.logout((err)=>{
     res.redirect("/")
   });
-  
+
 });
 
 app.post("/register", (req, res)=>{
