@@ -9,6 +9,7 @@ const passport = require("passport");
 const passportLocalMongoose = require('passport-local-mongoose');
 const LocalStrategy = require('passport-local').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const TwitterStrategy = require('passport-twitter').Strategy;
 const findOrCreate = require('mongoose-findorcreate');
 
 app.set('view engine', 'ejs');
@@ -32,7 +33,8 @@ mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true});
 const userSchema = new mongoose.Schema ({
   email: String,
   password: String,
-  googleId: String
+  googleId: String,
+  twitterId: String
 });
 
 // adding two plugings to the userSchema
@@ -67,9 +69,25 @@ passport.use(new GoogleStrategy({
   }
 ));
 
+passport.use(new TwitterStrategy({
+    consumerKey: process.env.TWITTER_CLIENT_ID,
+    consumerSecret: process.env.TWITTER_CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/twitter/secrets"
+  },
+  function(token, tokenSecret, profile, cb) {
+    console.log(profile);
+
+    User.findOrCreate({ twitterId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
+
+
 app.get("/", (req, res)=>{
   res.render('home');
 });
+
 
 app.get('/auth/google/secrets',
   passport.authenticate('google', { failureRedirect: '/login' }),
@@ -80,6 +98,19 @@ app.get('/auth/google/secrets',
 app.get("/auth/google",
   passport.authenticate("google",{ scope: ['profile'] })
 );
+
+
+app.get('/auth/twitter',
+  passport.authenticate('twitter',{ scope: ['profile'] })
+);
+
+app.get('/auth/twitter/secrets',
+  passport.authenticate('twitter', { failureRedirect: '/login' }),
+  function(req, res) {
+    res.redirect('/secrets');
+  }
+);
+
 
 app.get("/login", (req, res)=>{
   res.render('login');
