@@ -34,7 +34,8 @@ const userSchema = new mongoose.Schema ({
   email: String,
   password: String,
   googleId: String,
-  twitterId: String
+  twitterId: String,
+  secret: String
 });
 
 // adding two plugings to the userSchema
@@ -61,7 +62,7 @@ passport.use(new GoogleStrategy({
     userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo" //! From GitHub Issues because of G+ Deprecation
   },
   function(accessToken, refreshToken, profile, cb) {
-    console.log(profile);
+    // console.log(profile);
 
     User.findOrCreate({ googleId: profile.id }, function (err, user) {
       return cb(err, user);
@@ -75,7 +76,7 @@ passport.use(new TwitterStrategy({
     callbackURL: "http://localhost:3000/auth/twitter/secrets"
   },
   function(token, tokenSecret, profile, cb) {
-    console.log(profile);
+    // console.log(profile);
 
     User.findOrCreate({ twitterId: profile.id }, function (err, user) {
       return cb(err, user);
@@ -121,11 +122,42 @@ app.get("/register", (req, res)=>{
 });
 
 app.get("/secrets", (req, res)=>{
+  User.find({"secret":{$ne:null}})
+    .then((foundUsers)=>{
+      if(foundUsers){
+        res.render("secrets", {usersWithSecrets: foundUsers});
+      }
+    });
+});
+
+app.get("/submit", (req, res)=>{
   if (req.isAuthenticated()){
-    res.render("secrets");
+    res.render("submit");
   } else{
     res.redirect("/login");
   }
+});
+
+
+app.post("/submit", (req, res)=>{
+  const submittedSecret = req.body.secret;
+
+  User.findById(req.user)
+    .then((foundUser)=>{
+      if (err){
+        console.log(err);
+      } else{
+        if (foundUser){
+          console.log(foundUser);
+          foundUser.save()
+            .then(()=>{
+              res.redirect("/secrets");
+            });
+        }
+      }
+    });
+
+
 });
 
 app.get("/logout", (req, res)=>{
